@@ -39,3 +39,39 @@ command = "cargo"
 args = ["run"]
 ```
 in `Makefile.toml` so that `cargo make run` compiles and runs Hello World (dev build).
+
+## HTTP server with Actix
+Add `Actix` as dependency in `Cargo.toml`
+```
+[dependencies]
+actix-web = "4"
+```
+and then write a simple HTTP server in `main.rs`
+```
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    actix_web::HttpServer::new(move || {
+        actix_web::App::new()
+            .route("/", actix_web::web::get().to(hello_world))
+    })
+    .bind(("0.0.0.0", 3000))?
+    .run()
+    .await
+}
+
+async fn hello_world() -> actix_web::HttpResponse {
+    actix_web::HttpResponse::Ok().body("Hello, world!")
+}
+```
+that will display Hello World when GETting `localhost:3000`. Before running this, we need to thread the internal container port through Docker, so in `docker-compose.yml` add
+```
+services:
+  app:
+    ports:
+      - 3000:3000
+    image: rust
+    ...
+```
+Now we can relaunch the container with `docker-compose run --service-ports app` and then `cargo make run`.
+
+Viewing `http://localhost:3000` in a browser will display the message!

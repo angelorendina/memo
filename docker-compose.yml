@@ -9,6 +9,8 @@ services:
     environment:
       CARGO_HOME: /app/.cargo
       CARGO_TARGET_DIR: /app/target
+    ports:
+      - 3000:3000
 
 volumes:
   cargo:
