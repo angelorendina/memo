@@ -1,0 +1,15 @@
+services:
+  app:
+    image: rust
+    volumes:
+      - ".:/app"
+      - "cargo:/app/.cargo"
+      - "target:/app/target"
+    working_dir: /app
+    environment:
+      CARGO_HOME: /app/.cargo
+      CARGO_TARGET_DIR: /app/target
+
+volumes:
+  cargo:
+  target:
