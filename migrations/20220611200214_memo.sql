@@ -1,0 +1,6 @@
+CREATE TABLE memos(
+    "id" UUID PRIMARY KEY NOT NULL,
+    "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL,
+    "done" BOOLEAN NOT NULL,
+    "text" TEXT NOT NULL
+);

@@ -107,3 +107,35 @@ volumes:
 ```
 so that Postgres gets launched first, and when the healthcheck detects that it is up and running we also start the app.
 We also set a volume to store the actual data, which is located in `/postgres` as per the `PGDATA` envar.
+
+## Setting up the database
+Now `docker-compose run --service-ports app` will launch postgres and then log us into the app container.
+
+We `cargo install sqlx-cli` to easily manage the database through the cli and cargo-make.
+
+Add the necessary `DATABASE_URL` envar needed by the cli and the task to `Makefile.toml`
+```
+[env]
+DATABASE_URL="postgresql://user:password@postgres:5432/db"
+
+[tasks.db-migration]
+command = "cargo"
+args = ["sqlx", "migrate", "add", "${@}"]
+```
+and then `cargo make db-migration memo` to generate the first migration in `./migrations`:
+```
+CREATE TABLE memos(
+  "id" UUID PRIMARY KEY NOT NULL,
+  "timestamp" TIMESTAMP WITH TIME ZONE NOT NULL,
+  "done" BOOLEAN NOT NULL,
+  "text" TEXT NOT NULL
+);
+```
+
+Then in `Makefile.toml`
+```
+[tasks.db-setup]
+command = "sqlx"
+args = ["database", "setup", "--source=./migrations/"]
+```
+so that `cargo make db-setup` prepares the database.

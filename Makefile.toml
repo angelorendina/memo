@@ -1,3 +1,14 @@
+[env]
+DATABASE_URL="postgresql://user:password@postgres:5432/db"
+
 [tasks.run]
 command = "cargo"
 args = ["run"]
+
+[tasks.db-migration]
+command = "cargo"
+args = ["sqlx", "migrate", "add", "${@}"]
+
+[tasks.db-setup]
+command = "sqlx"
+args = ["database", "setup", "--source=./migrations/"]
