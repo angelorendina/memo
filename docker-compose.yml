@@ -11,7 +11,26 @@ services:
       CARGO_TARGET_DIR: /app/target
     ports:
       - 3000:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+  
+  postgres:
+    image: postgres
+    environment:
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_USER=user
+      - POSTGRES_DB=db
+      - PGDATA=/postgres
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - "postgres:/postgres"
 
 volumes:
   cargo:
   target:
+  postgres:

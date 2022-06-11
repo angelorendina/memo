@@ -75,3 +75,35 @@ services:
 Now we can relaunch the container with `docker-compose run --service-ports app` and then `cargo make run`.
 
 Viewing `http://localhost:3000` in a browser will display the message!
+
+## Postgres
+We use Postgres to store data. Add this to `docker-compose.yml`
+```
+services:
+  app:
+    ...
+    depends_on:
+      postgres:
+        condition: service_healthy
+  
+  postgres:
+    image: postgres
+    environment:
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_USER=user
+      - POSTGRES_DB=db
+      - PGDATA=/postgres
+    healthcheck:
+      test: ["CMD", "pg_isready"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - "postgres:/postgres"
+
+volumes:
+  ...
+  postgres
+```
+so that Postgres gets launched first, and when the healthcheck detects that it is up and running we also start the app.
+We also set a volume to store the actual data, which is located in `/postgres` as per the `PGDATA` envar.
