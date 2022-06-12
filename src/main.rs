@@ -17,6 +17,9 @@ async fn main() -> std::io::Result<()> {
         actix_web::App::new()
             .app_data(app_state.clone())
             .route("/", actix_web::web::get().to(memo::index))
+            .route("/", actix_web::web::post().to(memo::create))
+            .route("/", actix_web::web::put().to(memo::resolve))
+            .route("/", actix_web::web::delete().to(memo::delete))
     })
     .bind(("0.0.0.0", 3000))?
     .run()
