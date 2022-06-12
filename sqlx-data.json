@@ -1,0 +1,39 @@
+{
+  "db": "PostgreSQL",
+  "088210e8d358b66bc7eaef49efd22a751d851941bc535c0ce2370dc6b5d01fa8": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Uuid"
+        },
+        {
+          "name": "timestamp",
+          "ordinal": 1,
+          "type_info": "Timestamptz"
+        },
+        {
+          "name": "done",
+          "ordinal": 2,
+          "type_info": "Bool"
+        },
+        {
+          "name": "text",
+          "ordinal": 3,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Left": []
+      }
+    },
+    "query": "\n        SELECT\n            id, timestamp, done, text\n        FROM memos\n        ORDER BY timestamp\n            "
+  }
+}

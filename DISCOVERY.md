@@ -139,3 +139,89 @@ command = "sqlx"
 args = ["database", "setup", "--source=./migrations/"]
 ```
 so that `cargo make db-setup` prepares the database.
+
+## Reading from the database
+We add a few dependencies to `Cargo.toml`
+```
+chrono = { version = "0.4.19", features = ["serde"] }
+serde = "1"
+sqlx = { version = "0.5", features = ["runtime-tokio-native-tls", "uuid", "json", "chrono", "migrate", "postgres", "offline"] }
+uuid = { version = "0.8", features = ["serde", "v4"] }
+```
+and then add a new cargo make task to set up the [offline mode for sqlx](https://docs.rs/sqlx/latest/sqlx/macro.query.html#offline-mode-requires-the-offline-feature)
+```
+[tasks.db-prepare]
+command = "cargo"
+args = ["sqlx", "prepare"]
+```
+
+In a new module `memo.rs` define
+```
+#[derive(serde::Serialize)]
+struct Memo {
+    id: uuid::Uuid,
+    timestamp: chrono::DateTime<chrono::Utc>,
+    done: bool,
+    text: String,
+}
+
+impl Memo {
+    async fn index(executor: impl sqlx::PgExecutor<'_>) -> Result<Vec<Memo>, sqlx::Error> {
+        sqlx::query_as!(
+            Memo,
+            r#"
+        SELECT
+            id, timestamp, done, text
+        FROM memos
+        ORDER BY timestamp
+            "#,
+        )
+        .fetch_all(executor)
+        .await
+    }
+}
+```
+and now we can `cargo make db-prepare` to generate a new `sqlx-data.json` for sqlx's offline mode.
+
+Before defining the new endpoint, we need to establish a connection with the db. We connect at app launch and store it in a global shared state, so in `main.rs`
+```
+struct AppState {
+    pool: sqlx::Pool<sqlx::Postgres>,
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    let app_state = actix_web::web::Data::new(AppState {
+        pool: sqlx::pool::PoolOptions::new()
+            .connect("postgresql://user:password@postgres:5432/db")
+            .await
+            .expect("Could not connect to the DB"),
+    });
+
+    actix_web::HttpServer::new(move || {
+        actix_web::App::new()
+            .app_data(app_state.clone())
+            .route("/", actix_web::web::get().to(hello_world))
+    })
+    .bind(("0.0.0.0", 3000))?
+    .run()
+    .await
+}
+```
+
+We can define the new endpoint in `memo.rs`
+```
+pub(crate) async fn index(app_state: actix_web::web::Data<crate::AppState>) -> actix_web::HttpResponse {
+    match Memo::index(&app_state.pool).await {
+        Ok(memos) => actix_web::HttpResponse::Ok().json(memos),
+        Err(_) => actix_web::HttpResponse::InternalServerError().finish(),
+    }
+}
+```
+and remember to mount it
+```
+.route("/", actix_web::web::get().to(memo::index))
+```
+replacing the old Hello World (and deleting the unused handler!).
+
+Relaunching the app with `cargo make run` and GETting `locahost:3000` should now display an empty list.

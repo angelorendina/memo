@@ -12,3 +12,7 @@ args = ["sqlx", "migrate", "add", "${@}"]
 [tasks.db-setup]
 command = "sqlx"
 args = ["database", "setup", "--source=./migrations/"]
+
+[tasks.db-prepare]
+command = "cargo"
+args = ["sqlx", "prepare"]
