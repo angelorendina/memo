@@ -1,5 +1,6 @@
 [env]
 DATABASE_URL="postgresql://user:password@postgres:5432/db"
+RUST_LOG="debug"
 
 [tasks.run]
 command = "cargo"

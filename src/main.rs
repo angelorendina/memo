@@ -6,6 +6,8 @@ struct AppState {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    env_logger::init();
+
     let app_state = actix_web::web::Data::new(AppState {
         pool: sqlx::pool::PoolOptions::new()
             .connect("postgresql://user:password@postgres:5432/db")
@@ -16,6 +18,7 @@ async fn main() -> std::io::Result<()> {
     actix_web::HttpServer::new(move || {
         actix_web::App::new()
             .app_data(app_state.clone())
+            .wrap(actix_web::middleware::Logger::default())
             .route("/", actix_web::web::get().to(memo::index))
             .route("/", actix_web::web::post().to(memo::create))
             .route("/", actix_web::web::put().to(memo::resolve))

@@ -378,3 +378,38 @@ and
 .route("/", actix_web::web::put().to(memo::resolve))
 .route("/", actix_web::web::delete().to(memo::delete))
 ```
+
+## Logs and autorun
+To quickly add some logs, we add the dependency
+```
+env_logger = "0.9"
+```
+and then use it in `main`
+```
+async fn main() -> std::io::Result<()> {
+    env_logger::init();
+
+    ...
+
+    actix_web::HttpServer::new(move || {
+        actix_web::App::new()
+            .wrap(actix_web::middleware::Logger::default())
+            ...
+}
+```
+We also set the log level in `Makefile.toml` as
+```
+[env]
+RUST_LOG="debug"
+```
+Now `cargo make run` should print out the logs.
+
+To fully complete the backend, we add the command in `docker-compose.yml`
+```
+services:
+  app:
+    command: cargo make run
+    ...
+```
+This way, running `docker-compose run --service-ports app` will automatically compile and run the app.
+We can still `docker-compose run --service-ports app bash` to get an interactive session inside the container, but then would have to manually `cargo make run` to launch the server.
