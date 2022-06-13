@@ -413,3 +413,87 @@ services:
 ```
 This way, running `docker-compose run --service-ports app` will automatically compile and run the app.
 We can still `docker-compose run --service-ports app bash` to get an interactive session inside the container, but then would have to manually `cargo make run` to launch the server.
+
+## Workspace and new package
+We are going to split backend and frontend as two packages in the same workspace, a la monorepo.
+
+First, create the `backend` folder and move `src` and `Cargo.toml` in there, also renaming `name = "backend"` in the latter. Then create a new `Cargo.toml` in root with
+```
+[workspace]
+members = [
+    "backend",
+]
+```
+and also tweak the old service in `docker-compose.yml` 
+```
+services:
+  backend:
+    command: cargo make run-backend
+    ...
+```
+removing the port mapping as we will not expose the backend directly. Finally, update `Makefile.toml` with
+```
+[config]
+default_to_workspace = false
+
+[tasks.run-backend]
+command = "cargo"
+args = ["run", "-p", "backend"]
+
+[tasks.db-prepare]
+command = "cargo"
+args = ["sqlx", "prepare", "--", "-p", "backend"]
+```
+The `default_to_config` flag is related to [workspace support](https://github.com/sagiegurari/cargo-make#workspace-support).
+
+Now everything should be still working with `docker-compose run backend bash` and then `cargo make backend-run`.
+
+Next step is to add a new service to `docker-compose.yml`
+```
+  frontend:
+    image: rust
+    volumes:
+      - ".:/app"
+      - "cargo:/app/.cargo"
+      - "target:/app/target"
+    working_dir: /app
+    environment:
+      CARGO_HOME: /app/.cargo
+      CARGO_TARGET_DIR: /app/target
+    ports:
+      - 8080:8080
+    depends_on:
+      - backend
+```
+and then create a new `frontend` folder with `frontend/src/main.rs`
+```
+fn main() {
+    println!("Hello, world!");
+}
+```
+and `frontend/Cargo.toml`
+```
+[package]
+name = "frontend"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+```
+Add also the new member of the workspace to the root `Cargo.toml`
+```
+[workspace]
+members = [
+    "backend",
+    "frontend",
+]
+```
+and a task to run the project in `Makefile.toml`
+```
+[tasks.frontend-run]
+command = "cargo"
+args = ["run", "-p", "frontend"]
+```
+Because we set the frontend container depending on the backend, launching `docker-compose run frontend` should spin up the database first, then the backend, and finally log into the frontend, where `cargo make frontend-run` should print "Hello, World!".

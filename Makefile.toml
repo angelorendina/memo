@@ -2,9 +2,16 @@
 DATABASE_URL="postgresql://user:password@postgres:5432/db"
 RUST_LOG="debug"
 
-[tasks.run]
+[config]
+default_to_workspace = false
+
+[tasks.backend-run]
 command = "cargo"
-args = ["run"]
+args = ["run", "-p", "backend"]
+
+[tasks.frontend-run]
+command = "cargo"
+args = ["run", "-p", "frontend"]
 
 [tasks.db-migration]
 command = "cargo"
@@ -16,4 +23,4 @@ args = ["database", "setup", "--source=./migrations/"]
 
 [tasks.db-prepare]
 command = "cargo"
-args = ["sqlx", "prepare"]
+args = ["sqlx", "prepare", "--", "-p", "backend"]
