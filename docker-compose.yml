@@ -22,10 +22,12 @@ services:
       - ".:/app"
       - "cargo:/app/.cargo"
       - "target:/app/target"
+      - "rustup:/app/.rustup"
     working_dir: /app
     environment:
       CARGO_HOME: /app/.cargo
       CARGO_TARGET_DIR: /app/target
+      RUSTUP_HOME: /app/.rustup
     ports:
       - 8080:8080
     depends_on:
@@ -50,3 +52,4 @@ volumes:
   cargo:
   target:
   postgres:
+  rustup:

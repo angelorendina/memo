@@ -10,8 +10,8 @@ command = "cargo"
 args = ["run", "-p", "backend"]
 
 [tasks.frontend-run]
-command = "cargo"
-args = ["run", "-p", "frontend"]
+command = "trunk"
+args = ["serve", "--address", "0.0.0.0", "--dist", "./target/dist", "./frontend/index.html"]
 
 [tasks.db-migration]
 command = "cargo"

@@ -497,3 +497,51 @@ command = "cargo"
 args = ["run", "-p", "frontend"]
 ```
 Because we set the frontend container depending on the backend, launching `docker-compose run frontend` should spin up the database first, then the backend, and finally log into the frontend, where `cargo make frontend-run` should print "Hello, World!".
+
+## Serving the frontend
+To serve the WASM frontend, we need to install the appropriate Rust toolchain. Set the `RUSTUP_HOME` envar to cache it into a volume
+```
+frontend:
+  image: rust
+  volumes:
+    - ".:/app"
+    - "cargo:/app/.cargo"
+    - "target:/app/target"
+    - "rustup:/app/.rustup"
+  working_dir: /app
+  environment:
+    CARGO_HOME: /app/.cargo
+    CARGO_TARGET_DIR: /app/target
+    RUSTUP_HOME: /app/.rustup
+  ports:
+    - 8080:8080
+  depends_on:
+    - backend
+...
+volumes:
+  rustup:
+  ...
+```
+and then `docker-compose run --service-ports frontend` to get into the container.
+
+Running `rustup show` will display that no toolchains are installed - as we set a custom folder for those. So we first run `rustup toolchain install stable` and then `rustup target add wasm32-unknown-unknown` to add the WASM target.
+
+To simplify development and build of the frontend, we also `cargo install trunk` and `cargo install wasm-bindgen-cli`.
+
+Create `frontend/index.html`
+```
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Memo</title>
+  </head>
+</html>
+```
+and update `Makefile.toml`
+```
+[tasks.frontend-run]
+command = "trunk"
+args = ["serve", "--address", "0.0.0.0", "--dist", "./target/dist", "./frontend/index.html"]
+```
+Running `cargo make frontend-run` should now start compiling and serving the frontend (a blank page with title `Memos`).
