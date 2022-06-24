@@ -719,3 +719,92 @@ fn main() {
 }
 ```
 The frontend should now compile and display a boxed element (the Writer) that allows to input and append a message in the space below.
+
+## Parent-to-child communication
+Parents pass information to children via props. Here we implement a component to view and delete individual memos: in `frontend/src/app/viewer.rs`
+```
+use yew::{prelude::*, virtual_dom::AttrValue};
+
+pub(crate) struct Viewer;
+
+pub(crate) enum Msg {
+    Delete,
+}
+
+#[derive(PartialEq, Properties)]
+pub(crate) struct Props {
+    pub(crate) value: AttrValue,
+    pub(crate) on_delete: Callback<()>,
+}
+
+impl Component for Viewer {
+    type Message = Msg;
+    type Properties = Props;
+
+    fn create(_ctx: &Context<Self>) -> Self {
+        Self
+    }
+
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+        match msg {
+            Msg::Delete => {
+                ctx.props().on_delete.emit(());
+                false
+            }
+        }
+    }
+
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        let link = ctx.link();
+        let props = ctx.props();
+        html! {
+            <div style="padding: 4px; border: 1px dashed black;">
+                { &props.value }
+                <button onclick={link.callback(|_| Msg::Delete)}>{ "X" }</button>
+            </div>
+        }
+    }
+}
+```
+which takes its value as an `AttrValue` from the parent, and also a callback to bubble upwards the deletion of a memo.
+
+We also update `frontend/src/app.rs` to include the new viewer
+```
+mod viewer;
+...
+pub(crate) enum Msg {
+    CreateMemo(String),
+    DeleteMemo(usize),
+}
+...
+fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
+    match msg {
+        ...
+        Msg::DeleteMemo(index) => {
+            self.memos.remove(index);
+            true
+        }
+    }
+}
+...
+fn view(&self, ctx: &Context<Self>) -> Html {
+    let link = ctx.link();
+    html! {
+        <div>
+            <writer::Writer on_submit={link.callback(Msg::CreateMemo)}/>
+            <h3>{ "Memos" }</h3>
+            <div style="display: grid; row-gap: 8px; grid-auto-flow: row;">
+                { for self.memos.iter().enumerate().map(|(index, memo)| {
+                    html!(
+                        <viewer::Viewer
+                            value={AttrValue::from(memo.clone())}
+                            on_delete={link.callback(move |_| Msg::DeleteMemo(index))}
+                        />
+                    )
+                })}
+            </div>
+        </div>
+    }
+}
+```
+We can now create, view and delete simple memos. They will go away when we refresh the page though!

@@ -1,6 +1,7 @@
+mod viewer;
 mod writer;
 
-use yew::prelude::*;
+use yew::{prelude::*, virtual_dom::AttrValue};
 
 pub(crate) struct App {
     memos: Vec<String>,
@@ -8,6 +9,7 @@ pub(crate) struct App {
 
 pub(crate) enum Msg {
     CreateMemo(String),
+    DeleteMemo(usize),
 }
 
 impl Component for App {
@@ -24,6 +26,10 @@ impl Component for App {
                 self.memos.push(value);
                 true
             }
+            Msg::DeleteMemo(index) => {
+                self.memos.remove(index);
+                true
+            }
         }
     }
 
@@ -32,11 +38,17 @@ impl Component for App {
         html! {
             <div>
                 <writer::Writer on_submit={link.callback(Msg::CreateMemo)}/>
-                { for self.memos.iter().map(|memo| {
-                    html!(
-                        <div>{ memo }</div>
-                    )
-                })}
+                <h3>{ "Memos" }</h3>
+                <div style="display: grid; row-gap: 8px; grid-auto-flow: row;">
+                    { for self.memos.iter().enumerate().map(|(index, memo)| {
+                        html!(
+                            <viewer::Viewer
+                                value={AttrValue::from(memo.clone())}
+                                on_delete={link.callback(move |_| Msg::DeleteMemo(index))}
+                            />
+                        )
+                    })}
+                </div>
             </div>
         }
     }
