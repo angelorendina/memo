@@ -605,3 +605,117 @@ fn main() {
 }
 ```
 With `cargo make frontend-run`, Trunk will serve the page and also automatically watch for changes and recompile/hot-reload the frontend. Viewing the page on `http://localhost:8080` should display an input box, and its content should be duplicated below it.
+
+## Child-to-parent communication
+We create a Writer component, which has an input box to type in and a button to submit the value, so in `frontend/src/app/writer.rs`
+```
+use yew::prelude::*;
+
+pub(crate) struct Writer {
+    input_ref: NodeRef,
+}
+
+pub(crate) enum Msg {
+    Submit,
+}
+
+#[derive(PartialEq, Properties)]
+pub(crate) struct Props {
+    pub(crate) on_submit: Callback<String>,
+}
+
+impl Component for Writer {
+    type Message = Msg;
+    type Properties = Props;
+
+    fn create(_ctx: &Context<Self>) -> Self {
+        Self {
+            input_ref: Default::default(),
+        }
+    }
+
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+        match msg {
+            Msg::Submit => {
+                let input = self
+                    .input_ref
+                    .cast::<web_sys::HtmlInputElement>()
+                    .map(|h| h.value())
+                    .unwrap_or(String::new());
+                ctx.props().on_submit.emit(input);
+                false
+            }
+        }
+    }
+
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        let link = ctx.link();
+        html! {
+            <div style="border: 1px solid black; padding: 8px;">
+                <div>{ "New Memo" }</div>
+                <input ref={self.input_ref.clone()}/>
+                <button onclick={link.callback(|_| Msg::Submit)}>{ "Submit" }</button>
+            </div>
+        }
+    }
+}
+```
+The component has no knowledge of where it is or who the parent is. It only communicates upwards through the `on_submit` callback, which is invoked when the button is clicked. Its type is `Callback<String>`, and must be called with `.emit(value)` where `value` is a String (here, it's the value of the input element, which we hold a reference to with `NodeRef`).
+
+The parent hosts the child component and connects its `on_input` callback to the appropriate handler: in `frontend/src/app.rs`
+```
+mod writer;
+
+use yew::prelude::*;
+
+pub(crate) struct App {
+    memos: Vec<String>,
+}
+
+pub(crate) enum Msg {
+    CreateMemo(String),
+}
+
+impl Component for App {
+    type Message = Msg;
+    type Properties = ();
+
+    fn create(_ctx: &Context<Self>) -> Self {
+        Self { memos: vec![] }
+    }
+
+    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
+        match msg {
+            Msg::CreateMemo(value) => {
+                self.memos.push(value);
+                true
+            }
+        }
+    }
+
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        let link = ctx.link();
+        html! {
+            <div>
+                <writer::Writer on_submit={link.callback(Msg::CreateMemo)}/>
+                { for self.memos.iter().map(|memo| {
+                    html!(
+                        <div>{ memo }</div>
+                    )
+                })}
+            </div>
+        }
+    }
+}
+```
+where the handler will emit a `CreateMemo` message for the update function to deal with. Here we simply store all created strings in a vector, and display that as a list of divs.
+
+Finally we refactor `frontend/src/main.rs` for clarity
+```
+mod app;
+
+fn main() {
+    yew::start_app::<app::App>();
+}
+```
+The frontend should now compile and display a boxed element (the Writer) that allows to input and append a message in the space below.
