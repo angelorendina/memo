@@ -1,15 +1,9 @@
-#[derive(serde::Serialize)]
-struct Memo {
-    id: uuid::Uuid,
-    timestamp: chrono::DateTime<chrono::Utc>,
-    done: bool,
-    text: String,
-}
+struct MemoManager;
 
-impl Memo {
-    async fn index(executor: impl sqlx::PgExecutor<'_>) -> Result<Vec<Memo>, sqlx::Error> {
+impl MemoManager {
+    async fn index(executor: impl sqlx::PgExecutor<'_>) -> Result<Vec<common::Memo>, sqlx::Error> {
         sqlx::query_as!(
-            Memo,
+            common::Memo,
             r#"
         SELECT
             id, timestamp, done, text
@@ -21,7 +15,10 @@ impl Memo {
         .await
     }
 
-    async fn insert(executor: impl sqlx::PgExecutor<'_>, memo: &Memo) -> Result<(), sqlx::Error> {
+    async fn insert(
+        executor: impl sqlx::PgExecutor<'_>,
+        memo: &common::Memo,
+    ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
         INSERT INTO memos
@@ -77,46 +74,35 @@ impl Memo {
 pub(crate) async fn index(
     app_state: actix_web::web::Data<crate::AppState>,
 ) -> actix_web::HttpResponse {
-    match Memo::index(&app_state.pool).await {
+    match MemoManager::index(&app_state.pool).await {
         Ok(memos) => actix_web::HttpResponse::Ok().json(memos),
         Err(_) => actix_web::HttpResponse::InternalServerError().finish(),
     }
 }
 
-#[derive(serde::Deserialize)]
-pub(crate) struct NewMemoPayload {
-    text: String,
-}
-
 pub(crate) async fn create(
     app_state: actix_web::web::Data<crate::AppState>,
-    payload: actix_web::web::Json<NewMemoPayload>,
+    payload: actix_web::web::Json<common::NewMemoPayload>,
 ) -> actix_web::HttpResponse {
     let id = uuid::Uuid::new_v4();
-    let memo = Memo {
+    let memo = common::Memo {
         id,
         timestamp: chrono::Utc::now(),
         done: false,
         text: payload.into_inner().text,
     };
-    match Memo::insert(&app_state.pool, &memo).await {
+    match MemoManager::insert(&app_state.pool, &memo).await {
         Ok(_) => actix_web::HttpResponse::Ok().json(memo),
         Err(_) => actix_web::HttpResponse::InternalServerError().finish(),
     }
 }
 
-#[derive(serde::Deserialize)]
-pub(crate) struct UpdateMemoPayload {
-    id: uuid::Uuid,
-    done: bool,
-}
-
 pub(crate) async fn resolve(
     app_state: actix_web::web::Data<crate::AppState>,
-    payload: actix_web::web::Json<UpdateMemoPayload>,
+    payload: actix_web::web::Json<common::UpdateMemoPayload>,
 ) -> actix_web::HttpResponse {
     let payload = payload.into_inner();
-    match Memo::update(&app_state.pool, &payload.id, &payload.done).await {
+    match MemoManager::update(&app_state.pool, &payload.id, &payload.done).await {
         Ok(deleted) => {
             if deleted {
                 actix_web::HttpResponse::Ok().finish()
@@ -128,17 +114,12 @@ pub(crate) async fn resolve(
     }
 }
 
-#[derive(serde::Deserialize)]
-pub(crate) struct DeleteMemoPayload {
-    id: uuid::Uuid,
-}
-
 pub(crate) async fn delete(
     app_state: actix_web::web::Data<crate::AppState>,
-    payload: actix_web::web::Json<DeleteMemoPayload>,
+    payload: actix_web::web::Json<common::DeleteMemoPayload>,
 ) -> actix_web::HttpResponse {
     let payload = payload.into_inner();
-    match Memo::delete(&app_state.pool, &payload.id).await {
+    match MemoManager::delete(&app_state.pool, &payload.id).await {
         Ok(deleted) => {
             if deleted {
                 actix_web::HttpResponse::Ok().finish()

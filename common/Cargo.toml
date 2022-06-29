@@ -1,14 +1,11 @@
 [package]
-name = "frontend"
+name = "common"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-common = { path = "../common" }
-reqwasm = "0.5"
-serde_json = "1"
-yew = "0.19"
-wasm-bindgen-futures = "0.4"
-web-sys = "0.3"
+chrono = { version = "0.4.19", features = ["serde"] }
+serde = "1"
+uuid = { version = "0.8", features = ["serde"] }

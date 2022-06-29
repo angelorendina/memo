@@ -19,6 +19,7 @@ async fn main() -> std::io::Result<()> {
         actix_web::App::new()
             .app_data(app_state.clone())
             .wrap(actix_web::middleware::Logger::default())
+            .wrap(actix_cors::Cors::permissive())
             .route("/", actix_web::web::get().to(memo::index))
             .route("/", actix_web::web::post().to(memo::create))
             .route("/", actix_web::web::put().to(memo::resolve))

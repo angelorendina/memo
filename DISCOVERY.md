@@ -808,3 +808,168 @@ fn view(&self, ctx: &Context<Self>) -> Html {
 }
 ```
 We can now create, view and delete simple memos. They will go away when we refresh the page though!
+
+## Posting new memo
+We want the frontend to call the backend. Both being in Rust, we can share types between the two. Create a new crate `common`, so `common/Cargo.toml`
+```
+[package]
+name = "common"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = { version = "0.4.19", features = ["serde"] }
+serde = "1"
+uuid = { version = "0.8", features = ["serde"] }
+```
+and `common/src/lib.rs`
+```
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct Memo {
+    pub id: uuid::Uuid,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub done: bool,
+    pub text: String,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct NewMemoPayload {
+    pub text: String,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct UpdateMemoPayload {
+    pub id: uuid::Uuid,
+    pub done: bool,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct DeleteMemoPayload {
+    pub id: uuid::Uuid,
+}
+```
+
+Now we update the backend to use these shared types: tweak the necessary dependencies in `backend/Cargo.toml`
+```
+actix-cors = "0.6"
+actix-web = "4"
+chrono = "0.4"
+common = { path = "../common" }
+env_logger = "0.9"
+sqlx = { version = "0.5", features = ["runtime-tokio-native-tls", "uuid", "json", "chrono", "migrate", "postgres", "offline"] }
+uuid = { version = "0.8", features = ["v4"] }
+```
+also including `actix-cors`, which we will use shortly.
+
+Replace all the old types from `backend/src/memo.rs` in favour of those from the new `common` crate [code refactor omitted].
+
+Finally, add some CORS configuration for development in `backend/src/main.rs`
+```
+actix_web::HttpServer::new(move || {
+    actix_web::App::new()
+        .wrap(actix_cors::Cors::permissive())
+        ...
+```
+
+For the frontend, update the dependencies in `frontend/Cargo.toml`
+```
+common = { path = "../common" }
+reqwasm = "0.5"
+serde_json = "1"
+yew = "0.19"
+wasm-bindgen-futures = "0.4"
+web-sys = "0.3"
+```
+and update `frontend/src/app.rs`
+```
+mod fetch;
+
+enum State {
+    Loading,
+    Error(String),
+    Ok,
+}
+
+pub(crate) struct App {
+    memos: Vec<common::Memo>,
+    state: State,
+}
+
+pub(crate) enum Msg {
+    CreateMemo(String),
+    OnMemoCreated(common::Memo),
+    OnError(String),
+    DeleteMemo(usize),
+}
+
+impl Component for App {
+    ...
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+        match msg {
+            Msg::CreateMemo(value) => {
+                self.state = State::Loading;
+                fetch::create_memo(ctx, common::NewMemoPayload { text: value });
+                true
+            }
+            Msg::OnMemoCreated(memo) => {
+                self.state = State::Ok;
+                self.memos.push(memo);
+                true
+            }
+            Msg::OnError(error) => {
+                self.state = State::Error(error);
+                true
+            }
+            ...
+        }
+    }
+
+    fn view(&self, ctx: &Context<Self>) -> Html {
+        match &self.state {
+            State::Loading => html!(<div></div>),
+            State::Error(error) => html!(<div>{ &error }</div>),
+            State::Ok => { ... },
+        }
+    }
+}
+```
+and create a new module `frotend/src/app/fetch.rs`
+```
+use super::{App, Msg};
+
+const BACKEND_URL: &'static str = "http://localhost:3000";
+
+pub(crate) fn create_memo(ctx: &yew::Context<App>, new_memo: common::NewMemoPayload) {
+    let link = ctx.link().clone();
+    match serde_json::to_string(&new_memo) {
+        Ok(payload) => {
+            wasm_bindgen_futures::spawn_local(async move {
+                let response = reqwasm::http::Request::post(BACKEND_URL)
+                    .body(payload)
+                    .header("content-type", "application/json")
+                    .send()
+                    .await;
+                match response {
+                    Ok(body) => match body.json::<common::Memo>().await {
+                        Ok(memo) => {
+                            link.send_message(Msg::OnMemoCreated(memo));
+                        }
+                        Err(error) => {
+                            link.send_message(Msg::OnError(error.to_string()));
+                        }
+                    },
+                    Err(error) => {
+                        link.send_message(Msg::OnError(error.to_string()));
+                    }
+                }
+            });
+        }
+        Err(error) => {
+            link.send_message(Msg::OnError(error.to_string()));
+        }
+    }
+}
+```
+The frontend should now be able to actually create new memos in the database!
