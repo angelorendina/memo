@@ -20,7 +20,8 @@ pub(crate) enum Msg {
     OnMemoCreated(common::Memo),
     OnMemosFetched(Vec<common::Memo>),
     OnError(String),
-    DeleteMemo(usize),
+    DeleteMemo(uuid::Uuid),
+    OnMemoDeleted(uuid::Uuid),
 }
 
 impl Component for App {
@@ -56,8 +57,14 @@ impl Component for App {
                 self.state = State::Error(error);
                 true
             }
-            Msg::DeleteMemo(index) => {
-                self.memos.remove(index);
+            Msg::DeleteMemo(id) => {
+                self.state = State::Loading;
+                fetch::delete_memo(ctx, common::DeleteMemoPayload { id });
+                true
+            }
+            Msg::OnMemoDeleted(id) => {
+                self.state = State::Ok;
+                self.memos.retain(|memo| memo.id != id);
                 true
             }
         }
@@ -74,11 +81,12 @@ impl Component for App {
                         <writer::Writer on_submit={link.callback(Msg::CreateMemo)}/>
                         <h3>{ "Memos" }</h3>
                         <div style="display: grid; row-gap: 8px; grid-auto-flow: row;">
-                            { for self.memos.iter().enumerate().map(|(index, memo)| {
+                            { for self.memos.iter().map(|memo| {
+                                let id = memo.id.clone();
                                 html!(
                                     <viewer::Viewer
                                         value={AttrValue::from(memo.text.clone())}
-                                        on_delete={link.callback(move |_| Msg::DeleteMemo(index))}
+                                        on_delete={link.callback(move |_| Msg::DeleteMemo(id))}
                                     />
                                 )
                             })}

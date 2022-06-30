@@ -1025,3 +1025,85 @@ impl Component for App {
         }
     }
 ```
+
+## Deleting a memo
+Add the functionality to `frontend/src/app/fetch.rs`
+```
+pub(crate) fn delete_memo(ctx: &yew::Context<App>, delete_memo: common::DeleteMemoPayload) {
+    let link = ctx.link().clone();
+    match serde_json::to_string(&delete_memo) {
+        Ok(payload) => {
+            wasm_bindgen_futures::spawn_local(async move {
+                let response = reqwasm::http::Request::delete(BACKEND_URL)
+                    .body(payload)
+                    .header("content-type", "application/json")
+                    .send()
+                    .await;
+                match response {
+                    Ok(_) => {
+                        link.send_message(Msg::OnMemoDeleted(delete_memo.id));
+                    }
+                    Err(error) => {
+                        link.send_message(Msg::OnError(error.to_string()));
+                    }
+                }
+            });
+        }
+        Err(error) => {
+            link.send_message(Msg::OnError(error.to_string()));
+        }
+    }
+}
+```
+and then tweak `frontend/src/app.rs`
+```
+pub(crate) enum Msg {
+    ...
+    DeleteMemo(uuid::Uuid),
+    OnMemoDeleted(uuid::Uuid),
+}
+...
+fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+    match msg {
+        ...
+        Msg::DeleteMemo(id) => {
+            self.state = State::Loading;
+            fetch::delete_memo(ctx, common::DeleteMemoPayload { id });
+            true
+        }
+        Msg::OnMemoDeleted(id) => {
+            self.state = State::Ok;
+            self.memos.retain(|memo| memo.id != id);
+            true
+        }
+    }
+}
+...
+fn view(&self, ctx: &Context<Self>) -> Html {
+    match &self.state {
+        ...
+        State::Ok => {
+            let link = ctx.link();
+            html! {
+                <div>
+                    <writer::Writer on_submit={link.callback(Msg::CreateMemo)}/>
+                    <h3>{ "Memos" }</h3>
+                    <div style="display: grid; row-gap: 8px; grid-auto-flow: row;">
+                        { for self.memos.iter().map(|memo| {
+                            let id = memo.id.clone();
+                            html!(
+                                <viewer::Viewer
+                                    value={AttrValue::from(memo.text.clone())}
+                                    on_delete={link.callback(move |_| Msg::DeleteMemo(id))}
+                                />
+                            )
+                        })}
+                    </div>
+                </div>
+            }
+        }
+    }
+}
+```
+
+

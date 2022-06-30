@@ -645,6 +645,7 @@ dependencies = [
  "common",
  "reqwasm",
  "serde_json",
+ "uuid",
  "wasm-bindgen-futures",
  "web-sys",
  "yew",
