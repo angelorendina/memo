@@ -973,3 +973,55 @@ pub(crate) fn create_memo(ctx: &yew::Context<App>, new_memo: common::NewMemoPayl
 }
 ```
 The frontend should now be able to actually create new memos in the database!
+
+## Fetching all memos
+To load all memos on page load, we add a new method in `frontend/src/app/fetch.rs`
+```
+pub(crate) fn get_memos(ctx: &yew::Context<App>) {
+    let link = ctx.link().clone();
+    wasm_bindgen_futures::spawn_local(async move {
+        let response = reqwasm::http::Request::get(BACKEND_URL).send().await;
+        match response {
+            Ok(body) => match body.json::<Vec<common::Memo>>().await {
+                Ok(memos) => {
+                    link.send_message(Msg::OnMemosFetched(memos));
+                }
+                Err(error) => {
+                    link.send_message(Msg::OnError(error.to_string()));
+                }
+            },
+            Err(error) => {
+                link.send_message(Msg::OnError(error.to_string()));
+            }
+        }
+    });
+}
+```
+and tweak `frontend/src/app.rs` to fetch on created
+```
+pub(crate) enum Msg {
+    OnMemosFetched(Vec<common::Memo>),
+    ...
+}
+
+impl Component for App {
+    ...
+    fn create(ctx: &Context<Self>) -> Self {
+        fetch::get_memos(ctx);
+        Self {
+            memos: vec![],
+            state: State::Loading,
+        }
+    }
+
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+        match msg {
+            Msg::OnMemosFetched(memos) => {
+                self.state = State::Ok;
+                self.memos = memos;
+                true
+            }
+            ...
+        }
+    }
+```

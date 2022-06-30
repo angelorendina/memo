@@ -32,3 +32,23 @@ pub(crate) fn create_memo(ctx: &yew::Context<App>, new_memo: common::NewMemoPayl
         }
     }
 }
+
+pub(crate) fn get_memos(ctx: &yew::Context<App>) {
+    let link = ctx.link().clone();
+    wasm_bindgen_futures::spawn_local(async move {
+        let response = reqwasm::http::Request::get(BACKEND_URL).send().await;
+        match response {
+            Ok(body) => match body.json::<Vec<common::Memo>>().await {
+                Ok(memos) => {
+                    link.send_message(Msg::OnMemosFetched(memos));
+                }
+                Err(error) => {
+                    link.send_message(Msg::OnError(error.to_string()));
+                }
+            },
+            Err(error) => {
+                link.send_message(Msg::OnError(error.to_string()));
+            }
+        }
+    });
+}

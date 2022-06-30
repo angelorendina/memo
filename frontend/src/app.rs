@@ -18,6 +18,7 @@ pub(crate) struct App {
 pub(crate) enum Msg {
     CreateMemo(String),
     OnMemoCreated(common::Memo),
+    OnMemosFetched(Vec<common::Memo>),
     OnError(String),
     DeleteMemo(usize),
 }
@@ -26,10 +27,11 @@ impl Component for App {
     type Message = Msg;
     type Properties = ();
 
-    fn create(_ctx: &Context<Self>) -> Self {
+    fn create(ctx: &Context<Self>) -> Self {
+        fetch::get_memos(ctx);
         Self {
             memos: vec![],
-            state: State::Ok,
+            state: State::Loading,
         }
     }
 
@@ -43,6 +45,11 @@ impl Component for App {
             Msg::OnMemoCreated(memo) => {
                 self.state = State::Ok;
                 self.memos.push(memo);
+                true
+            }
+            Msg::OnMemosFetched(memos) => {
+                self.state = State::Ok;
+                self.memos = memos;
                 true
             }
             Msg::OnError(error) => {
