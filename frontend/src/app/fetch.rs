@@ -78,3 +78,29 @@ pub(crate) fn delete_memo(ctx: &yew::Context<App>, delete_memo: common::DeleteMe
         }
     }
 }
+
+pub(crate) fn resolve_memo(ctx: &yew::Context<App>, update_memo: common::UpdateMemoPayload) {
+    let link = ctx.link().clone();
+    match serde_json::to_string(&update_memo) {
+        Ok(payload) => {
+            wasm_bindgen_futures::spawn_local(async move {
+                let response = reqwasm::http::Request::put(BACKEND_URL)
+                    .body(payload)
+                    .header("content-type", "application/json")
+                    .send()
+                    .await;
+                match response {
+                    Ok(_) => {
+                        link.send_message(Msg::OnMemoUpdated(update_memo.id, update_memo.done));
+                    }
+                    Err(error) => {
+                        link.send_message(Msg::OnError(error.to_string()));
+                    }
+                }
+            });
+        }
+        Err(error) => {
+            link.send_message(Msg::OnError(error.to_string()));
+        }
+    }
+}

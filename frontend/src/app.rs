@@ -22,6 +22,8 @@ pub(crate) enum Msg {
     OnError(String),
     DeleteMemo(uuid::Uuid),
     OnMemoDeleted(uuid::Uuid),
+    UpdateMemo(uuid::Uuid, bool),
+    OnMemoUpdated(uuid::Uuid, bool),
 }
 
 impl Component for App {
@@ -67,6 +69,20 @@ impl Component for App {
                 self.memos.retain(|memo| memo.id != id);
                 true
             }
+            Msg::UpdateMemo(id, done) => {
+                self.state = State::Loading;
+                fetch::resolve_memo(ctx, common::UpdateMemoPayload { id, done });
+                true
+            }
+            Msg::OnMemoUpdated(id, done) => {
+                self.state = State::Ok;
+                self.memos.iter_mut().for_each(|memo| {
+                    if memo.id == id {
+                        memo.done = done
+                    }
+                });
+                true
+            }
         }
     }
 
@@ -83,10 +99,13 @@ impl Component for App {
                         <div style="display: grid; row-gap: 8px; grid-auto-flow: row;">
                             { for self.memos.iter().map(|memo| {
                                 let id = memo.id.clone();
+                                let done = memo.done.clone();
                                 html!(
                                     <viewer::Viewer
                                         value={AttrValue::from(memo.text.clone())}
+                                        checked={memo.done}
                                         on_delete={link.callback(move |_| Msg::DeleteMemo(id))}
+                                        on_change={link.callback(move |_| Msg::UpdateMemo(id, !done))}
                                     />
                                 )
                             })}

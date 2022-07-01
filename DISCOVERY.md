@@ -1106,4 +1106,111 @@ fn view(&self, ctx: &Context<Self>) -> Html {
 }
 ```
 
+## Resolving a memo
+Last touch is to mark memos as resolved. Add the api call in `frontend/src/app/fetch.rs`
+```
+pub(crate) fn resolve_memo(ctx: &yew::Context<App>, update_memo: common::UpdateMemoPayload) {
+    let link = ctx.link().clone();
+    match serde_json::to_string(&update_memo) {
+        Ok(payload) => {
+            wasm_bindgen_futures::spawn_local(async move {
+                let response = reqwasm::http::Request::put(BACKEND_URL)
+                    .body(payload)
+                    .header("content-type", "application/json")
+                    .send()
+                    .await;
+                match response {
+                    Ok(_) => {
+                        link.send_message(Msg::OnMemoUpdated(update_memo.id, update_memo.done));
+                    }
+                    Err(error) => {
+                        link.send_message(Msg::OnError(error.to_string()));
+                    }
+                }
+            });
+        }
+        Err(error) => {
+            link.send_message(Msg::OnError(error.to_string()));
+        }
+    }
+}
+```
+and update `frontend/src/app.rs`
+```
+pub(crate) enum Msg {
+    ...
+    UpdateMemo(uuid::Uuid, bool),
+    OnMemoUpdated(uuid::Uuid, bool),
+}
+...
+fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+    match msg {
+        ...
+        Msg::UpdateMemo(id, done) => {
+            self.state = State::Loading;
+            fetch::resolve_memo(ctx, common::UpdateMemoPayload { id, done });
+            true
+        }
+        Msg::OnMemoUpdated(id, done) => {
+            self.state = State::Ok;
+            self.memos.iter_mut().for_each(|memo| {
+                if memo.id == id {
+                    memo.done = done
+                }
+            });
+            true
+        }
+    }
+}
+...
+fn view(&self, ctx: &Context<Self>) -> Html {
+    match &self.state {
+        ...
+        html!(
+            <viewer::Viewer
+                value={AttrValue::from(memo.text.clone())}
+                checked={memo.done}
+                on_delete={link.callback(move |_| Msg::DeleteMemo(id))}
+                on_change={link.callback(move |_| Msg::UpdateMemo(id, !done))}
+            />
+        )
+        ...
+    }
+}
+```
+and add the new functionality in `frontend/src/app/viewer.rs`
+```
+pub(crate) enum Msg {
+    ...
+    Change,
+}
+...
+#[derive(PartialEq, Properties)]
+pub(crate) struct Props {
+    ...
+    pub(crate) checked: bool,
+    pub(crate) on_change: Callback<()>,
+}
+...
+fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+    match msg {
+        ...
+        Msg::Change => {
+            ctx.props().on_change.emit(());
+            false
+        }
+    }
+}
 
+fn view(&self, ctx: &Context<Self>) -> Html {
+    let link = ctx.link();
+    let props = ctx.props();
+    html! {
+        <div style="padding: 4px; border: 1px dashed black;">
+            <button onclick={link.callback(|_| Msg::Delete)}>{ "X" }</button>
+            <input type="checkbox" checked={props.checked} onchange={link.callback(|_| Msg::Change)}/>
+            { &props.value }
+        </div>
+    }
+}
+```

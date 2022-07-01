@@ -4,12 +4,15 @@ pub(crate) struct Viewer;
 
 pub(crate) enum Msg {
     Delete,
+    Change,
 }
 
 #[derive(PartialEq, Properties)]
 pub(crate) struct Props {
     pub(crate) value: AttrValue,
+    pub(crate) checked: bool,
     pub(crate) on_delete: Callback<()>,
+    pub(crate) on_change: Callback<()>,
 }
 
 impl Component for Viewer {
@@ -26,6 +29,10 @@ impl Component for Viewer {
                 ctx.props().on_delete.emit(());
                 false
             }
+            Msg::Change => {
+                ctx.props().on_change.emit(());
+                false
+            }
         }
     }
 
@@ -34,8 +41,9 @@ impl Component for Viewer {
         let props = ctx.props();
         html! {
             <div style="padding: 4px; border: 1px dashed black;">
-                { &props.value }
                 <button onclick={link.callback(|_| Msg::Delete)}>{ "X" }</button>
+                <input type="checkbox" checked={props.checked} onchange={link.callback(|_| Msg::Change)}/>
+                { &props.value }
             </div>
         }
     }
