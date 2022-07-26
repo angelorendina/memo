@@ -8,9 +8,14 @@ struct AppState {
 async fn main() -> std::io::Result<()> {
     env_logger::init();
 
+    let database_url = std::env!("DATABASE_URL");
+    let server_port = std::env!("BACKEND_PORT")
+        .parse::<u16>()
+        .expect("Port must be a u16");
+
     let app_state = actix_web::web::Data::new(AppState {
         pool: sqlx::pool::PoolOptions::new()
-            .connect("postgresql://user:password@postgres:5432/db")
+            .connect(&database_url)
             .await
             .expect("Could not connect to the DB"),
     });
@@ -25,7 +30,7 @@ async fn main() -> std::io::Result<()> {
             .route("/", actix_web::web::put().to(memo::resolve))
             .route("/", actix_web::web::delete().to(memo::delete))
     })
-    .bind(("0.0.0.0", 3000))?
+    .bind(("0.0.0.0", server_port))?
     .run()
     .await
 }

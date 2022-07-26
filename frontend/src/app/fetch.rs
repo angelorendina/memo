@@ -1,6 +1,6 @@
 use super::{App, Msg};
 
-const BACKEND_URL: &'static str = "http://localhost:3000";
+const BACKEND_URL: &'static str = std::env!("BACKEND_URL");
 
 pub(crate) fn create_memo(ctx: &yew::Context<App>, new_memo: common::NewMemoPayload) {
     let link = ctx.link().clone();

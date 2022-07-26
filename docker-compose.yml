@@ -32,6 +32,7 @@ services:
       - 8080:8080
     depends_on:
       - backend
+    command: cargo make frontend-run
 
   postgres:
     image: postgres

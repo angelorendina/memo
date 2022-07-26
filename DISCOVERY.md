@@ -1214,3 +1214,49 @@ fn view(&self, ctx: &Context<Self>) -> Html {
     }
 }
 ```
+
+## Completing the local development
+Update `backend/src/main.rs`
+```
+async fn main() -> std::io::Result<()> {
+    let database_url = std::env!("DATABASE_URL");
+    let server_port = std::env!("BACKEND_PORT")
+        .parse::<u16>()
+        .expect("Port must be a u16");
+
+    env_logger::init();
+
+    let app_state = actix_web::web::Data::new(AppState {
+        pool: sqlx::pool::PoolOptions::new()
+            .connect(&database_url)
+            .await
+            .expect("Could not connect to the DB"),
+    });
+
+    actix_web::HttpServer::new(...)
+    .bind(("0.0.0.0", server_port))?
+    .run()
+    .await
+}
+```
+and `frontend/src/app/fetch.rs`
+```
+const BACKEND_URL: &'static str = std::env!("BACKEND_URL");
+```
+and `Makefile.toml`
+```
+[env]
+RUST_LOG="debug"
+DATABASE_URL="postgresql://user:password@postgres:5432/db"
+BACKEND_URL="http://localhost:3000"
+BACKEND_PORT=3000
+...
+```
+and finally tweak `docker-compose.yml`
+```
+services:
+  frontend:
+    command: cargo make frontend-run
+....
+```
+Now the whole app should run with `docker-compose up`.

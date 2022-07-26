@@ -1,6 +1,8 @@
 [env]
-DATABASE_URL="postgresql://user:password@postgres:5432/db"
 RUST_LOG="debug"
+DATABASE_URL="postgresql://user:password@postgres:5432/db"
+BACKEND_URL="http://localhost:3000"
+BACKEND_PORT=3000
 
 [config]
 default_to_workspace = false
