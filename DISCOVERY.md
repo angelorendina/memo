@@ -1260,3 +1260,104 @@ services:
 ....
 ```
 Now the whole app should run with `docker-compose up`.
+
+## Building release images
+We use cargo-make's profiles to streamline the process. Update `Makefile.toml`
+```
+[env.development]
+RUST_LOG="debug"
+DATABASE_URL="postgresql://user:password@postgres:5432/db"
+BACKEND_URL="http://localhost:3000"
+BACKEND_PORT=3000
+
+[env.release]
+RUST_LOG="info"
+DATABASE_URL="${DATABASE_URL}"
+BACKEND_URL="${BACKEND_URL}"
+BACKEND_PORT="${BACKEND_PORT}"
+
+[tasks.backend-build]
+command = "cargo"
+args = ["build", "--release", "-p", "backend"]
+
+[tasks.frontend-build]
+command = "trunk"
+args = ["build", "--release", "--dist", "./dist", "./frontend/index.html"]
+...
+```
+and tweak `docker-compose.yml`
+```
+services:
+  backend:
+    ...
+    command: cargo make --profile development backend-run
+
+  frontend:
+    ...
+    command: cargo make --profile development frontend-run
+
+  postgres:
+    ...
+    ports:
+      - 5432:5432
+```
+Define the build instructions for the BE in `backend/Dockerfile`
+```
+FROM rust AS builder
+RUN cargo install cargo-make
+
+FROM builder as compiler
+ARG BACKEND_PORT
+ARG DATABASE_URL
+ENV BACKEND_PORT ${BACKEND_PORT}
+ENV DATABASE_URL ${DATABASE_URL}
+COPY . /memo
+WORKDIR /memo
+RUN cargo make --profile release backend-build
+
+FROM debian:buster-slim as runner
+RUN apt update
+RUN apt install -y libssl1.1
+
+FROM runner
+ARG BACKEND_PORT
+COPY --from=compiler /memo/target/release/backend /memo/backend
+EXPOSE ${BACKEND_PORT}
+CMD ["/memo/backend"]
+```
+and for the FE in `frontend/Dockerfile`
+```
+FROM rust AS base
+RUN cargo install cargo-make
+RUN rustup toolchain install stable
+RUN rustup target add wasm32-unknown-unknown
+RUN cargo install trunk
+RUN cargo install wasm-bindgen-cli
+
+FROM base AS builder
+ARG BACKEND_URL
+ENV BACKEND_URL ${BACKEND_URL}
+COPY . /memo
+WORKDIR /memo
+RUN cargo make --profile release frontend-build
+
+FROM httpd:alpine
+COPY --from=builder /memo/dist/. /usr/local/apache2/htdocs/.
+EXPOSE 80
+```
+
+We can build the images and run them locally to test them out. For the backend,
+```
+docker build -f ./backend/Dockerfile -t memo-backend --build-arg DATABASE_URL=postgresql://user:password@host.docker.internal:5432/db --build-arg BACKEND_PORT=3000 .
+docker create -p 3000:3000 --name memo-backend memo-backend
+docker start memo-backend
+```
+which should serve the BE on `localhost:3000`. To test it out, run postgres locally with `docker-compose run --service-ports postgres` and restart the BE container so that it can connect.
+
+In parallel we can also
+```
+docker build -f ./frontend/Dockerfile -t memo-frontend --build-arg BACKEND_URL=http://localhost:3000 .
+docker create -p 8080:80 --name memo-frontend memo-frontend
+docker start memo-frontend
+```
+to run the FE on `localhost:8080`, which should prove the whole app working as intended.

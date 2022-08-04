@@ -1,8 +1,15 @@
-[env]
+[env.development]
 RUST_LOG="debug"
 DATABASE_URL="postgresql://user:password@postgres:5432/db"
 BACKEND_URL="http://localhost:3000"
 BACKEND_PORT=3000
+
+[env.release]
+RUST_LOG="info"
+DATABASE_URL="${DATABASE_URL}"
+BACKEND_URL="${BACKEND_URL}"
+BACKEND_PORT="${BACKEND_PORT}"
+SQLX_OFFLINE=true
 
 [config]
 default_to_workspace = false
@@ -11,9 +18,17 @@ default_to_workspace = false
 command = "cargo"
 args = ["run", "-p", "backend"]
 
+[tasks.backend-build]
+command = "cargo"
+args = ["build", "--release", "-p", "backend"]
+
 [tasks.frontend-run]
 command = "trunk"
 args = ["serve", "--address", "0.0.0.0", "--dist", "./target/dist", "./frontend/index.html"]
+
+[tasks.frontend-build]
+command = "trunk"
+args = ["build", "--release", "--dist", "./dist", "./frontend/index.html"]
 
 [tasks.db-migration]
 command = "cargo"

@@ -14,7 +14,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: cargo make backend-run
+    command: cargo make --profile development backend-run
 
   frontend:
     image: rust
@@ -32,7 +32,7 @@ services:
       - 8080:8080
     depends_on:
       - backend
-    command: cargo make frontend-run
+    command: cargo make --profile development frontend-run
 
   postgres:
     image: postgres
@@ -41,6 +41,8 @@ services:
       - POSTGRES_USER=user
       - POSTGRES_DB=db
       - PGDATA=/postgres
+    ports:
+      - 5432:5432
     healthcheck:
       test: ["CMD", "pg_isready"]
       interval: 5s
