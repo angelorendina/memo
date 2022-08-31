@@ -1361,3 +1361,277 @@ docker create -p 8080:80 --name memo-frontend memo-frontend
 docker start memo-frontend
 ```
 to run the FE on `localhost:8080`, which should prove the whole app working as intended.
+
+## Deploying with Kubernetes
+We use `minikube` to simulate Kubernetes locally.
+
+We want a Postgres deployment and a backend deployment (connected internally with the DB) which exposes the API publicly on `http://backend.memo`.
+In addition, another deployment will serve the frontend on `http://frontend.memo`.
+
+We start with the configuration for the db in `k8s/postgres/configmap.yml`
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  labels:
+    app: postgres
+data:
+  POSTGRES_DB: db
+  POSTGRES_USER: user
+  POSTGRES_PASSWORD: password
+```
+and a storage to persist the data in `k8s/postgres/storage.yml`
+```
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv-volume
+  labels:
+    type: local
+    app: postgres
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: "/mnt/data"
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: postgres-pv-claim
+  labels:
+    app: postgres
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+```
+The deployment (using a default postgres image) is `k8s/postgres/deployment.yml`
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:14.5-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - configMapRef:
+                name: postgres-config
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: postgredb
+      volumes:
+        - name: postgredb
+          persistentVolumeClaim:
+            claimName: postgres-pv-claim
+```
+and finally the (internal) service `k8s/postgres/service.yml`
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  ports:
+  - port: 5432
+  selector:
+    app: postgres
+```
+
+Now deploy everything with
+```
+kubectl apply -f k8s/postgres/configmap.yml
+kubectl apply -f k8s/postgres/storage.yml
+kubectl apply -f k8s/postgres/deployment.yml
+kubectl apply -f k8s/postgres/service.yml
+```
+
+Obviously the database starts empty, so we need to apply the app schema. We already have the necessary migration, but we need to access the database (which is not exposed outside the cluster).
+With `minikube service postgres --url` we can temporarily open a tunnel via `localhost:XXXXX` (a random port will be allocated), and then run
+```
+DATABASE_URL=postgresql://user:password@localhost:XXXXX/db cargo sqlx database setup --source=./migrations
+```
+to generate the necessary table. The tunnel can now be closed.
+
+For the backend, we first need to build the image with the correct configuration, so
+```
+docker build -f ./backend/Dockerfile -t memo-backend --build-arg DATABASE_URL=postgresql://user:password@postgres:5432/db --build-arg BACKEND_PORT=3000 .
+```
+Notice the db url refers to `postgres`, the name of the k8s service inside the cluster. Then
+```
+minikube image load memo-backend
+```
+and setup `k8s/backend/deployment.yml`
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: memo-backend
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3000
+```
+and `k8s/backend/service.yml`
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  ports:
+   - port: 3000
+  selector:
+   app: backend
+```
+and apply everything with
+```
+kubectl apply -f k8s/backend/deployment.yml
+kubectl apply -f k8s/backend/service.yml
+```
+
+Similarly for the frontend
+```
+docker build -f ./frontend/Dockerfile -t memo-frontend --build-arg BACKEND_URL=http://backend.memo .
+```
+then
+```
+minikube image load memo-frontend
+```
+and `k8s/frontend/deployment.yml`
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: memo-frontend
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 80
+```
+and `k8s/frontend/service.yml`
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+spec:
+  ports:
+   - port: 80 
+  selector:
+   app: frontend
+```
+and apply everything with
+```
+kubectl apply -f k8s/frontend/deployment.yml
+kubectl apply -f k8s/frontend/service.yml
+```
+
+To expose the app, we need an ingress routing the traffic. First
+```
+minikube addons enable ingress
+```
+then setup `k8s/ingress.yml`
+```
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: memo
+spec:
+  rules:
+  - host: backend.memo
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 3000
+  - host: frontend.memo
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 80
+```
+and
+```
+kubectl apply -f k8s/ingress.yml
+```
+Now open the local tunnel with
+```
+minikube tunnel
+```
+which listens on `localhost:80` and routes traffic through the ingress.
+
+Last needed step (just for the local machine) is to setup the correct hostname resolution: simply add
+```
+127.0.0.1 backend.memo
+127.0.0.1 frontend.memo
+```
+to `/etc/hosts`.
+
+Visiting `http://frontend.memo` on the browser should display the running app, and the REST API should also be directly accessible on `http://backend.memo`.
