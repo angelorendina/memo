@@ -1,4 +1,4 @@
-[env.development]
+[env.docker]
 RUST_LOG="debug"
 DATABASE_URL="postgresql://user:password@postgres:5432/db"
 BACKEND_URL="http://localhost:3000"
