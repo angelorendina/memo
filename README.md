@@ -1,6 +1,8 @@
 # Dockerising and deploying a full-stack Rust + WASM web app
 
-This is the code for the [homonymous talk](TODO: LINK) I gave at [RustLab2022](https://rustlab.it/).
+This is the code for the homonymous talk I gave at [RustLab2022](https://rustlab.it/).
+
+The supporting presentation slides are in the `slides.pdf` file in this repo, and a recording of the talk can be found [on Youtube](https://www.youtube.com/watch?v=0geOH76BCbQ).
 
 It is a full-stack "todo" app, with both Backend and Frontend written in Rust.
 
